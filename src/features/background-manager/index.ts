@@ -5,6 +5,7 @@ import { log } from "../../shared/logger"
 interface TaskEntry {
   task: BackgroundTask
   abortController: AbortController
+  pollTimer?: ReturnType<typeof setInterval>
 }
 
 export class BackgroundManager {
@@ -58,8 +59,6 @@ export class BackgroundManager {
     this.tasks.set(id, { task, abortController })
 
     try {
-      task.status = "running"
-
       const createResult = await this.client.session.create({
         body: {
           parentID: this.parentSessionId || undefined,
@@ -69,47 +68,66 @@ export class BackgroundManager {
       })
 
       if (createResult.error) {
-        throw new Error(`Session create failed: ${String(createResult.error)}`)
+        task.status = "error"
+        log(`Background task session create failed: ${id}`, {
+          error: String(createResult.error),
+        })
+        return task
       }
 
       const sessionId = (createResult.data as { id: string }).id
       task.sessionId = sessionId
+      task.status = "running"
       log(`Background task session created: ${id}`, { sessionId })
 
       const parts: Array<{ type: string; text: string }> = [
         { type: "text", text: prompt },
       ]
 
-      const body: Record<string, unknown> = {
-        parts,
-      }
-
+      const body: Record<string, unknown> = { parts }
       if (model) {
         body.model = { providerID: model.providerID, modelID: model.modelID }
       }
 
-      await this.client.session.prompt({
+      void this.client.session.prompt({
         path: { id: sessionId },
         body,
         query: { directory: this.directory },
       } as Parameters<typeof this.client.session.prompt>[0])
-
-      task.status = "completed"
-      log(`Background task completed: ${id}`, { sessionId })
-    } catch (err: unknown) {
-      if (err instanceof DOMException && err.name === "AbortError") {
-        task.status = "cancelled"
-      } else if (err instanceof Error && err.name === "AbortError") {
-        task.status = "cancelled"
-      } else {
-        task.status = "error"
-        log(`Background task error: ${id}`, {
-          error: err instanceof Error ? err.message : String(err),
+        .then(() => {
+          task.status = "completed"
+          log(`Background task completed: ${id}`, { sessionId })
+          this.stopPolling(id)
         })
-      }
+        .catch((err: unknown) => {
+          if (err instanceof Error && err.name === "AbortError") {
+            task.status = "cancelled"
+          } else {
+            task.status = "error"
+            log(`Background task error: ${id}`, {
+              error: err instanceof Error ? err.message : String(err),
+            })
+          }
+          this.stopPolling(id)
+        })
+
+      task.status = "running"
+    } catch (err: unknown) {
+      task.status = "error"
+      log(`Background task launch error: ${id}`, {
+        error: err instanceof Error ? err.message : String(err),
+      })
     }
 
     return task
+  }
+
+  private stopPolling(taskId: string): void {
+    const entry = this.tasks.get(taskId)
+    if (entry?.pollTimer) {
+      clearInterval(entry.pollTimer)
+      entry.pollTimer = undefined
+    }
   }
 
   cancel(id: string): boolean {
@@ -120,6 +138,7 @@ export class BackgroundManager {
     if (entry.task.status === "running" || entry.task.status === "pending") {
       entry.task.status = "cancelled"
     }
+    this.stopPolling(id)
     return true
   }
 
@@ -193,9 +212,8 @@ export class BackgroundManager {
 
   shutdown(): void {
     for (const [id, entry] of this.tasks) {
-      if (entry.task.status === "running" || entry.task.status === "pending") {
-        entry.abortController.abort()
-      }
+      entry.abortController.abort()
+      this.stopPolling(id)
       this.tasks.delete(id)
     }
   }

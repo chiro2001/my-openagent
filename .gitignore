@@ -1,4 +1,5 @@
 node_modules/
-dist/
+dist/*.map
+dist/*.d.ts
 *.log
 .env

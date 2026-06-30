@@ -89,7 +89,7 @@ export class BackgroundManager {
         body.model = { providerID: model.providerID, modelID: model.modelID }
       }
 
-      void this.client.session.prompt({
+      this.client.session.prompt({
         path: { id: sessionId },
         body,
         query: { directory: this.directory },

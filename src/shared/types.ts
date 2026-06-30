@@ -41,6 +41,10 @@ export interface AgentConfig {
 
 export interface MyOpenAgentConfig {
   agent: AgentConfig
+  subagent: {
+    quick?: { providerID: string; modelID: string }
+    deep?: { providerID: string; modelID: string }
+  }
   todo_continuation: {
     enabled: boolean
     cooldown_ms: number

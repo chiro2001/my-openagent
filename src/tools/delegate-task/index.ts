@@ -1,5 +1,6 @@
 import { z } from "zod"
 import type { BackgroundManager } from "../../features/background-manager/index"
+import { loadConfig } from "../../config"
 import { log } from "../../shared/logger"
 
 const delegateTaskSchema = z.object({
@@ -12,10 +13,18 @@ const delegateTaskSchema = z.object({
   task_id: z.string().optional(),
 })
 
+function resolveModel(category: string | undefined): { providerID: string; modelID: string } | undefined {
+  const config = loadConfig()
+  const cat = (category || "").toLowerCase()
+  if (cat === "quick" && config.subagent.quick) return config.subagent.quick
+  if ((cat === "deep" || cat === "general") && config.subagent.deep) return config.subagent.deep
+  return undefined
+}
+
 export function createDelegateTask(manager: BackgroundManager) {
   return {
     description:
-      "Spawn a background subagent task to execute work independently. Use run_in_background=true for parallel execution. Use task_id to continue an existing task session. Provide either category or subagent_type.",
+      "Spawn a background subagent task. Use category='quick' for fast/cheap tasks or category='deep' for complex reasoning. Each category can be configured with a different model via MYOA_QUICK_MODEL and MYOA_DEEP_MODEL env vars (format: providerID/modelID). Leave category unspecified to use the main model.",
     parameters: delegateTaskSchema,
     async execute(args: z.infer<typeof delegateTaskSchema>) {
       if (!args.category && !args.subagent_type && !args.task_id) {
@@ -33,16 +42,19 @@ export function createDelegateTask(manager: BackgroundManager) {
       }
 
       const label = args.category || args.subagent_type || "task"
+      const model = resolveModel(args.category)
 
       try {
         const task = await manager.launch(
           `${label}: ${args.description}`,
-          args.prompt
+          args.prompt,
+          model
         )
 
         log(`delegate-task launched: ${task.id}`, {
           category: args.category,
           subagent_type: args.subagent_type,
+          model: model ? `${model.providerID}/${model.modelID}` : "default",
           status: task.status,
         })
 
@@ -51,6 +63,7 @@ export function createDelegateTask(manager: BackgroundManager) {
           status: task.status,
           description: task.description,
           session_id: task.sessionId,
+          model: model ? `${model.providerID}/${model.modelID}` : "default",
         })
       } catch (err: unknown) {
         return JSON.stringify({

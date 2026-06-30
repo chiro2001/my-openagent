@@ -14,7 +14,8 @@ const ptySpawnSchema = z.object({
 })
 
 const ptyReadSchema = z.object({
-  id: z.string(),
+  id: z.string().optional(),
+  ptyId: z.string().optional(),
   offset: z.number().optional().default(0),
   limit: z.number().optional().default(500),
   pattern: z.string().optional(),
@@ -22,12 +23,15 @@ const ptyReadSchema = z.object({
 })
 
 const ptyWriteSchema = z.object({
-  id: z.string(),
-  data: z.string(),
+  id: z.string().optional(),
+  ptyId: z.string().optional(),
+  data: z.string().optional(),
+  input: z.string().optional(),
 })
 
 const ptyKillSchema = z.object({
-  id: z.string(),
+  id: z.string().optional(),
+  ptyId: z.string().optional(),
   cleanup: z.boolean().optional().default(false),
 })
 
@@ -68,9 +72,11 @@ export function createPtyTools(manager: PtyManager) {
         "Reads output from a PTY session buffer. Use offset and limit to paginate. The PTY maintains a rolling buffer of output lines. Use pattern to filter lines by regex.",
       parameters: ptyReadSchema,
       async execute(args: z.infer<typeof ptyReadSchema>) {
-        const { lines, totalLines, session } = manager.read(args.id, args.offset, args.limit)
+        const sessionId = args.id || args.ptyId
+        if (!sessionId) return JSON.stringify({ error: "id or ptyId is required" })
+        const { lines, totalLines, session } = manager.read(sessionId, args.offset, args.limit)
         if (!session) {
-          return JSON.stringify({ error: `PTY session ${args.id} not found` })
+          return JSON.stringify({ error: `PTY session ${sessionId} not found` })
         }
 
         let filtered = lines
@@ -101,8 +107,12 @@ export function createPtyTools(manager: PtyManager) {
         "Sends input data to an active PTY session. Use for typing commands, responding to prompts, or sending control sequences like Ctrl+C (\\x03), Enter (\\n).",
       parameters: ptyWriteSchema,
       async execute(args: z.infer<typeof ptyWriteSchema>) {
-        const ok = manager.write(args.id, args.data)
-        return ok ? "success" : JSON.stringify({ error: `Cannot write to PTY ${args.id}` })
+        const sessionId = args.id || args.ptyId
+        const writeData = args.data || args.input
+        if (!sessionId) return JSON.stringify({ error: "id or ptyId is required" })
+        if (!writeData) return JSON.stringify({ error: "data or input is required" })
+        const ok = manager.write(sessionId, writeData)
+        return ok ? "success" : JSON.stringify({ error: `Cannot write to PTY ${sessionId}` })
       },
     },
 
@@ -111,11 +121,13 @@ export function createPtyTools(manager: PtyManager) {
         "Terminates a PTY session and optionally cleans up its buffer. Use cleanup=true to free memory.",
       parameters: ptyKillSchema,
       async execute(args: z.infer<typeof ptyKillSchema>) {
-        const ok = manager.kill(args.id)
-        if (!ok) return JSON.stringify({ error: `PTY session ${args.id} not found` })
-        if (args.cleanup) manager.cleanup(args.id)
-        log(`pty_kill: ${args.id}`)
-        return `PTY session ${args.id} killed`
+        const sessionId = args.id || args.ptyId
+        if (!sessionId) return JSON.stringify({ error: "id or ptyId is required" })
+        const ok = manager.kill(sessionId)
+        if (!ok) return JSON.stringify({ error: `PTY session ${sessionId} not found` })
+        if (args.cleanup) manager.cleanup(sessionId)
+        log(`pty_kill: ${sessionId}`)
+        return `PTY session ${sessionId} killed`
       },
     },
 

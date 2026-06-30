@@ -30,7 +30,8 @@ export function createPtyManager(config: MyOpenAgentConfig["pty"]): PtyManager {
       const id = `pty_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`
       const timeoutMs = options.timeoutMs ?? config.default_timeout_seconds * 1000
 
-      const proc = Bun.spawn([command, ...args], {
+      const safeArgs = Array.isArray(args) ? args : []
+      const proc = Bun.spawn([command, ...safeArgs], {
         stdout: "pipe",
         stderr: "pipe",
         stdin: "pipe",

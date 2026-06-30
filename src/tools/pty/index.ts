@@ -37,11 +37,12 @@ export function createPtyTools(manager: PtyManager) {
   return {
     pty_spawn: {
       description:
-        "Spawns a new interactive PTY (pseudo-terminal) session that runs in the background. Unlike bash which runs commands synchronously, PTY sessions persist and allow you to run long-running processes, send interactive input, read output at any time, and manage multiple concurrent terminal sessions.",
+        "Spawns a new PTY session that runs in the background. The command must be a bare executable name (e.g. 'echo', 'bash', 'ls'). Use args array to pass arguments (e.g. command='echo', args=['hello']). Persists for long-running processes, interactive input, and output reading.",
       parameters: ptySpawnSchema,
       async execute(args: z.infer<typeof ptySpawnSchema>) {
         try {
-          const session = manager.spawn(args.command, args.args, {
+          const cmdArgs = Array.isArray(args.args) ? args.args : []
+          const session = manager.spawn(args.command, cmdArgs, {
             title: args.title,
             timeoutMs: args.timeoutSeconds ? args.timeoutSeconds * 1000 : undefined,
           })

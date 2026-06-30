@@ -6,6 +6,19 @@ import type { MyOpenAgentConfig } from "../../config"
 
 const HOOK_NAME = "todo-continuation-enforcer"
 
+function getStringField(record: Record<string, unknown> | undefined, key: string): string | undefined {
+  const value = record?.[key]
+  return typeof value === "string" && value.length > 0 ? value : undefined
+}
+
+function resolveSessionId(props: Record<string, unknown> | undefined): string | undefined {
+  if (!props) return undefined
+  const info = (props.info as Record<string, unknown> | undefined)
+  return getStringField(props, "sessionID")
+    ?? getStringField(info, "sessionID")
+    ?? getStringField(info, "id")
+}
+
 const CONTINUATION_PROMPT = `\
 You have incomplete tasks remaining in your todo list.
 Review your progress and continue working on pending tasks.
@@ -62,7 +75,7 @@ export function createTodoContinuationEnforcer(
 
     const props = event.properties as Record<string, unknown> | undefined
     if (event.type === "session.idle") {
-      const sessionId = props?.session?.id as string | undefined
+      const sessionId = resolveSessionId(props)
       if (!sessionId) return
 
       if (isContinuationStopped?.(sessionId)) {
@@ -107,7 +120,7 @@ export function createTodoContinuationEnforcer(
     }
 
     if (event.type === "session.deleted") {
-      const sessionId = props?.session?.id as string | undefined
+      const sessionId = resolveSessionId(props)
       if (sessionId) {
         const state = sessions.get(sessionId)
         if (state?.countdownTimer) {

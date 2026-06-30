@@ -25,24 +25,34 @@ export function createTodoStore(): TodoStore {
   }
 }
 
-export function parseTodosFromToolCall(args: string): TodoItem[] {
-  try {
-    const parsed = JSON.parse(args)
-    if (!parsed.todos || !Array.isArray(parsed.todos)) return []
+function parseTodosFromObject(obj: Record<string, unknown>): TodoItem[] {
+  const todosArray = obj.todos
+  if (!Array.isArray(todosArray)) return []
 
-    return parsed.todos.map(
-      (t: Record<string, unknown>, i: number): TodoItem => ({
-        id: `todo_${Date.now()}_${i}`,
-        content: String(t.content || ""),
-        status: (t.status as TodoItem["status"]) || "pending",
-        priority: (t.priority as TodoItem["priority"]) || "medium",
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      })
-    )
-  } catch {
-    return []
+  return todosArray.map(
+    (t: Record<string, unknown>, i: number): TodoItem => ({
+      id: `todo_${Date.now()}_${i}`,
+      content: String(t.content || ""),
+      status: (t.status as TodoItem["status"]) || "pending",
+      priority: (t.priority as TodoItem["priority"]) || "medium",
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    })
+  )
+}
+
+export function parseTodosFromToolCall(args: string | Record<string, unknown>): TodoItem[] {
+  if (typeof args === "string") {
+    try {
+      return parseTodosFromObject(JSON.parse(args))
+    } catch {
+      return []
+    }
   }
+  if (typeof args === "object" && args !== null) {
+    return parseTodosFromObject(args)
+  }
+  return []
 }
 
 class TodoManagerImpl {
@@ -57,7 +67,7 @@ class TodoManagerImpl {
     return store
   }
 
-  updateFromToolCall(sessionId: string, args: string): void {
+  updateFromToolCall(sessionId: string, args: string | Record<string, unknown>): void {
     const items = parseTodosFromToolCall(args)
     if (items.length === 0) return
 

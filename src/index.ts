@@ -60,7 +60,7 @@ const serverPlugin: Plugin = async (input: PluginInput): Promise<Hooks> => {
       if (toolInput.tool === "todowrite" && toolInput.args && toolInput.sessionID) {
         todoManager.updateFromToolCall(
           String(toolInput.sessionID),
-          String(toolInput.args)
+          toolInput.args as string | Record<string, unknown>
         )
       }
     },

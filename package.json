@@ -1,0 +1,38 @@
+{
+  "name": "my-openagent",
+  "version": "0.1.0",
+  "description": "Lightweight OpenCode plugin with subagent spawning, todo reminders, and PTY tools",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "my-openagent": "bin/my-openagent.js"
+  },
+  "files": [
+    "dist",
+    "bin",
+    ".opencode/commands",
+    ".opencode/skills"
+  ],
+  "exports": {
+    ".": {
+"types": "./src/index.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "bun build src/index.ts --outdir dist --target bun --format esm --external @opencode-ai/plugin --external @opencode-ai/sdk"
+  },
+  "keywords": ["opencode", "plugin", "agent"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@opencode-ai/plugin": "^1.15.0",
+    "@opencode-ai/sdk": "^1.15.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "bun-types": "latest",
+    "typescript": "^5.7.0"
+  }
+}
